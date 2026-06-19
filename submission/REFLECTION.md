@@ -19,4 +19,28 @@ Answer briefly, in your own words. This is graded on reasoning, not length.
    answers well that flat chunk retrieval (`embed.py`) would struggle with, and
    one where the graph is overkill.
 
-_Write your answers below._
+**1. Flywheel.** Bước **decontamination** dễ hỏng âm thầm nhất: lab chỉ khớp exact-match, nên prompt viết lại vẫn có thể rò vào train dù eval “sạch”. Phát hiện bằng audit overlap train/eval (n-gram hoặc embedding), so sánh eval offline với A/B production — metric eval cao nhưng traffic thật không cải thiện.
+
+**2. Decontamination.** Bỏ qua bước này, model học thuộc đáp án đã có trong eval set (3 pair → 1 pair sạch). Eval win-rate/accuracy sẽ cao giả do leakage, không phải generalize; lie lộ ra khi test prompt mới hoặc deploy production vẫn kém dù benchmark “đẹp”.
+
+**3. Point-in-time.** Feature **tổng chi tiêu tích lũy (lifetime spend)** — join “giá trị mới nhất” thay vì ASOF đưa spend tương lai vào dòng training, giống `naive_leaky_features` trong lab; offline tốt, inference thiếu dữ liệu chưa xảy ra nên sai.
+
+**4. Graph vs vector.** KG trả lời tốt: *“Widget ship from đâu?”* — cần 2 hop (widget → accessory → Hanoi), không chunk nào chứa cả chuỗi. Graph thừa: *“Widget returnable không?”* — một fact trong một chunk, vector retrieval (`embed.py`) đủ.
+
+---
+
+## Extension — Compare decontamination (`compare_embed_models.py`)
+
+Chạy: `python compare_embed_models.py` (Model A = exact, Model B = `gemini-3.1-flash-lite`, threshold = 0.55)
+
+| | Model A (exact) | Model B (Gemini 3.1 Flash Lite) |
+|---|---|---|
+| Giữ lại | 2 pair | 1 pair |
+| Loại | 2 | 3 |
+| Paraphrase probe | sim **0.000** (bỏ sót) | sim **1.000** (bắt được) |
+
+**Paraphrase test**
+- Eval: *Can I return a widget I bought 10 days ago?*
+- Pair: *is a widget bought ten days ago eligible for return?*
+
+Exact-match chỉ loại prompt trùng chuỗi (lab: 3 raw → 1 sạch). Gemini loại thêm paraphrase cùng intent → Model B bắt **1 leak** mà Model A bỏ sót. Kết luận: decontamination exact-match không đủ production; cần semantic judge (LLM hoặc embedding) như đã nêu ở câu 1–2.
